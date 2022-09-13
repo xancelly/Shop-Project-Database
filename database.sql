@@ -28,7 +28,7 @@ go
 create table good (
 	article_number int primary key identity,
 	[photo] nvarchar(max),
-	[name] nvarchar(50) not null,
+	[name] nvarchar(150) not null,
 	descrtiption nvarchar(max),
 	code_category int foreign key references category(code_category) not null,
 	id_manufacturer int foreign key references manufacturer(id_manufacturer) not null
