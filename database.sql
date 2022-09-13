@@ -5,7 +5,6 @@ go
 use ShopDB
 go
 
---tables
 create table user_profile (
 	id_user int primary key identity,
 	last_name nvarchar(50) not null,
@@ -33,6 +32,14 @@ create table good (
 	descrtiption nvarchar(max),
 	code_category int foreign key references category(code_category) not null,
 	id_manufacturer int foreign key references manufacturer(id_manufacturer) not null
+)
+go
+create table good_rate (
+	id int primary key identity,
+	article_number int foreign key references good(article_number) not null,
+	id_user int foreign key references user_profile(id_user) not null,
+	rate int not null,
+	feedback nvarchar(300) null
 )
 go
 create table parameter (
@@ -80,6 +87,3 @@ create table order_good (
 	[count] int not null
 )
 go
-
---data
-insert into category 
