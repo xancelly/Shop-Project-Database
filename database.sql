@@ -42,16 +42,11 @@ create table good_rate (
 	feedback nvarchar(300) null
 )
 go
-create table parameter (
-	id_parameter int primary key identity,
-	[name] nvarchar(50) not null,
-	[value] nvarchar(50) not null
-)
-go
 create table good_parameter (
 	id_good_parameter int primary key identity,
 	article_number int foreign key references good(article_number) not null,
-	id_parameter int foreign key references parameter(id_parameter) not null
+	[name] nvarchar(50) not null,
+	[value] nvarchar(150) not null
 )
 go
 create table good_price (
