@@ -80,7 +80,7 @@ begin
 end
 go
 ----------------------------------------------
-create trigger delete_good 
+create trigger check_delete_good 
 on good
 after delete
 as
@@ -104,6 +104,70 @@ begin
 	if ((select COUNT(og.article_number) from order_good og where og.article_number = (select d.article_number from deleted d)) >= 1)
 	begin
 		raiserror('Товар невозможно удалить, так как его данные содержатся в таблице заказов.', 16, 1)
+		rollback tran
+	end
+end
+go
+----------------------------------------------
+create trigger check_insert_update_good_parameter
+on good_parameter
+after insert,update
+as
+begin
+	if (LEN((select i.[name] from inserted i)) < 2)
+	begin
+		raiserror('Наименование характеристики не может быть менее 2-х символов.', 16, 1)
+		rollback tran
+	end
+end
+go
+----------------------------------------------
+--TRIGGERS ON USER_PROFILE TABLE
+----------------------------------------------
+create trigger check_insert_user_profile
+on user_profile
+after insert
+as
+begin
+	if (LEN((select i.last_name from inserted i)) < 2)
+	begin
+		raiserror('Фамилия не может быть менее 2-х символов.', 16, 1)
+		rollback tran
+	end
+	if (LEN((select i.first_name from inserted i)) < 2)
+	begin
+		raiserror('Имя не может быть менее 2-х символов.', 16, 1)
+		rollback tran
+	end
+	if (((select i.middle_name from inserted i)) != null)
+	begin
+		if (LEN((select i.middle_name from inserted i)) < 2)
+		begin
+			raiserror('Отчество не может быть менее 2-х символов', 16, 1)
+			rollback tran
+		end
+	end
+	if ((select i.phone_number from inserted i) not like '+7 ([0-9][0-9][0-9]) [0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+	begin
+		raiserror('Телефон не соотвествует формату +7 (999) 999-99-99', 16, 1)
+		rollback tran
+	end
+	if (LEN((select i.password from inserted i)) < 8)
+	begin
+		raiserror('Пароль не может быть менее 8-и символов', 16, 1)
+		rollback tran
+	end
+end
+go
+----------------------------------------------
+create trigger check_delete_user_profile
+on user_profile
+after delete
+as
+begin
+	if ((select COUNT(o.code_order) from [order] o where o.id_user = (select d.id_user from deleted d)) >= 1)
+	begin
+		raiserror('Невозможно удалить пользователя так как у него имеются заказы', 16, 1)
 		rollback tran
 	end
 end
