@@ -97,3 +97,40 @@ begin
 end
 go
 ----------------------------------------------
+--PROCEDURES ON USER_PROFILE TABLE
+----------------------------------------------
+create procedure SignUp (
+	@last_name nvarchar(50),
+	@first_name nvarchar(50),
+	@middle_name nvarchar(50) null,
+	@phone_number nvarchar(20),
+	@password nvarchar(32)
+)
+as
+begin
+	insert into user_profile (last_name, first_name, middle_name, phone_number, [password], is_admin)
+	values (@last_name, @first_name, @middle_name, @phone_number, @password, 0)
+end
+go
+----------------------------------------------
+create procedure SignIn (
+	@phone_number nvarchar(20),
+	@password nvarchar(32),
+	@id_user int out,
+	@is_admin bit out
+)
+as
+begin
+	declare @current_user int = (select up.id_user from user_profile up where up.phone_number = @phone_number and up.[password] = @password)
+	if ((select COUNT(up.id_user) from user_profile up where up.id_user = @current_user) = 1)
+	begin
+		set @id_user = @current_user
+		set @is_admin = (select up.is_admin from user_profile up where up.id_user = @current_user)
+	end
+	else 
+	begin 
+		raiserror('Номер телефона или пароль введены некорректно.', 16, 1)
+	end
+end
+go
+----------------------------------------------
