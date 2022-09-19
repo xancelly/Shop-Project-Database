@@ -173,3 +173,18 @@ begin
 end
 go
 ----------------------------------------------
+--TRIGGERS ON ORDER TABLE
+----------------------------------------------
+create trigger check_delete_order
+on [order]
+after delete
+as
+begin
+	if ((select COUNT(og.id_order_good) from order_good og where og.id_order = (select d.code_order from deleted d)) > 0)
+	begin
+		raiserror('Заказ невозможно удалить.', 16, 1)
+		rollback tran
+	end
+end
+go
+----------------------------------------------
