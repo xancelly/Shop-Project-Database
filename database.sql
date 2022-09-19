@@ -26,7 +26,7 @@ create table category (
 )
 go
 create table good (
-	article_number int primary key identity,
+	article_number int primary key not null,
 	[photo] nvarchar(max),
 	[name] nvarchar(150) not null,
 	descrtiption nvarchar(max),
