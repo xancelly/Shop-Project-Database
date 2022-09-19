@@ -28,6 +28,17 @@ begin
 end
 go
 ----------------------------------------------
+create procedure get_good_parameter (
+	@article_code int
+)
+as
+begin
+	select *
+	from good_parameter gp
+	where gp.article_number = @article_code
+end
+go
+----------------------------------------------
 create procedure add_good (
 	@article_number int,
 	@photo nvarchar(max),
@@ -134,3 +145,73 @@ begin
 end
 go
 ----------------------------------------------
+--PROCEDURES ON ORDER TABLE
+----------------------------------------------
+create procedure add_order (
+	@id_user int
+)
+as
+begin
+	insert into [order] (date_order, id_status, id_user)
+	values (GETDATE(), 1, @id_user)
+end
+go
+----------------------------------------------
+create procedure update_order (
+	@code_order int,
+	@id_status int
+)
+as
+begin
+	update [order]
+	set id_status = @id_status
+	where code_order = @code_order
+end
+go
+----------------------------------------------
+create procedure delete_order (
+	@code_order int
+)
+as
+begin
+	delete [order]
+	where code_order = @code_order
+end
+go
+----------------------------------------------
+create procedure get_order (
+	@code_order int
+)
+as
+begin
+	if ((select COUNT(o.code_order) from [order] o where o.code_order = @code_order) = 0)
+	begin
+		raiserror('Выбранный заказ не существует.', 16, 1)
+	end
+	else 
+	begin
+		declare @article_number int
+		declare @count int
+		declare @sum money = 0
+
+		declare @cursor cursor
+		set @cursor = cursor scroll
+		for select og.article_number, og.[count] from order_good og where og.id_order = @code_order
+		open @cursor
+		fetch next from @cursor into @article_number, @count
+		while @@FETCH_STATUS = 0
+		begin
+			declare @good_order_price money = (select top 1 gp.price from good_price gp where gp.article_number = @article_number and gp.change_date <= (select o.date_order from [order] o where o.code_order = @code_order) order by gp.change_date desc)
+			declare @good_order_tax decimal(5,2) = (select top 1 gt.tax from good_tax gt where gt.article_number = @article_number and gt.change_date <= (select o.date_order from [order] o where o.code_order = @code_order) order by gt.change_date desc)
+			declare @total money = (@good_order_price + ((@good_order_price * @good_order_tax)/100))
+			set @sum = @sum + (@total * @count)
+			fetch next from @cursor into @article_number, @count
+		end
+		close @cursor
+
+		select o.code_order, o.date_order, os.[name], (up.last_name + ' ' + up.first_name + ' ' + up.middle_name) as 'client', @sum as 'order_sum'
+		from [order] o join order_status os on os.id_status = o.id_status join user_profile up on up.id_user = o.id_user
+		where o.code_order = @code_order
+	end
+end
+go
