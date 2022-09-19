@@ -215,3 +215,27 @@ begin
 	end
 end
 go
+----------------------------------------------
+--PROCEDURES ON GOOD_PARAMETER TABLE
+----------------------------------------------
+create procedure add_good_parameter (
+	@article_number int,
+	@name nvarchar(50),
+	@value nvarchar(100)
+)
+as
+begin
+	insert into good_parameter
+	values (@article_number, @name, @value)
+end
+go
+----------------------------------------------
+create procedure delete_good_parameter  (
+	@article_number int
+)
+as
+begin
+	delete good_parameter
+	where article_number = @article_number
+end
+go
