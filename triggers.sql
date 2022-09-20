@@ -41,10 +41,10 @@ after insert, update
 as
 begin
 	--check article number of good
-	if ((select COUNT(g.article_number) from good g where g.article_number = (select i.article_number from inserted i)) = 0)
+	if ((select COUNT(g.article_number) from good g where g.article_number = (select i.article_number from inserted i)) <= 1)
 	begin
 		--check name of good
-		if (LEN((select i.[name] from inserted i)) < 3)
+		if (LEN((select i.[name] from inserted i)) >= 3)
 		begin
 			--check category of good
 			if ((select COUNT(c.code_category) from category c where c.code_category = (select i.code_category from inserted i)) = 1)
@@ -104,6 +104,11 @@ begin
 	if ((select COUNT(og.article_number) from order_good og where og.article_number = (select d.article_number from deleted d)) >= 1)
 	begin
 		raiserror('Товар невозможно удалить, так как его данные содержатся в таблице заказов.', 16, 1)
+		rollback tran
+	end
+	if ((select COUNT(gr.id) from good_rate gr where gr.article_number = (select d.article_number from deleted d)) >= 1)
+	begin
+		raiserror('Товар невозможно удалить, так как у него есть отзывы.', 16, 1)
 		rollback tran
 	end
 end
@@ -188,3 +193,21 @@ begin
 end
 go
 ----------------------------------------------
+--TRIGGERS ON GOOD_RATE TABLE
+----------------------------------------------
+create trigger check_good_rate
+on good_rate
+after insert, update
+as
+begin
+	if ((select i.rate from inserted i) not like '[1-5]')
+	begin
+		raiserror('Ошибка при вводе оценки товара. Поставьте оценку в пределах от 1 до 5.', 16, 1)
+		rollback tran
+	end
+	if ((select COUNT(gr.id) from good_rate gr where gr.id_user = (select i.id_user from inserted i) and gr.article_number = (select i.article_number from inserted i)) > 1)
+	begin
+		raiserror('Вы уже оствляли отзыв на данный товар.', 16, 1)
+		rollback tran
+	end
+end
