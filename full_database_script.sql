@@ -4,9 +4,7 @@ create database ShopDB
 go
 use ShopDB
 go
-----------------------------------------------
-				--TABLES--
-----------------------------------------------
+
 create table user_profile (
 	id_user int primary key identity,
 	last_name nvarchar(50) not null,
@@ -28,7 +26,7 @@ create table category (
 )
 go
 create table good (
-	article_number int primary key identity,
+	article_number int primary key not null,
 	[photo] nvarchar(max),
 	[name] nvarchar(150) not null,
 	descrtiption nvarchar(max),
@@ -111,7 +109,6 @@ go
 ----------------------------------------------
 				--TRIGGERS--
 ----------------------------------------------
-----------------------------------------------
 --TRIGGER ON GOOD_PRICE TABLE
 ----------------------------------------------
 create trigger check_insert_price
@@ -152,10 +149,10 @@ after insert, update
 as
 begin
 	--check article number of good
-	if ((select COUNT(g.article_number) from good g where g.article_number = (select i.article_number from inserted i)) = 0)
+	if ((select COUNT(g.article_number) from good g where g.article_number = (select i.article_number from inserted i)) <= 1)
 	begin
 		--check name of good
-		if (LEN((select i.[name] from inserted i)) < 3)
+		if (LEN((select i.[name] from inserted i)) >= 3)
 		begin
 			--check category of good
 			if ((select COUNT(c.code_category) from category c where c.code_category = (select i.code_category from inserted i)) = 1)
@@ -215,6 +212,11 @@ begin
 	if ((select COUNT(og.article_number) from order_good og where og.article_number = (select d.article_number from deleted d)) >= 1)
 	begin
 		raiserror('Товар невозможно удалить, так как его данные содержатся в таблице заказов.', 16, 1)
+		rollback tran
+	end
+	if ((select COUNT(gr.id) from good_rate gr where gr.article_number = (select d.article_number from deleted d)) >= 1)
+	begin
+		raiserror('Товар невозможно удалить, так как у него есть отзывы.', 16, 1)
 		rollback tran
 	end
 end
@@ -299,9 +301,27 @@ begin
 end
 go
 ----------------------------------------------
+--TRIGGERS ON GOOD_RATE TABLE
+----------------------------------------------
+create trigger check_good_rate
+on good_rate
+after insert, update
+as
+begin
+	if ((select i.rate from inserted i) not like '[1-5]')
+	begin
+		raiserror('Ошибка при вводе оценки товара. Поставьте оценку в пределах от 1 до 5.', 16, 1)
+		rollback tran
+	end
+	if ((select COUNT(gr.id) from good_rate gr where gr.id_user = (select i.id_user from inserted i) and gr.article_number = (select i.article_number from inserted i)) > 1)
+	begin
+		raiserror('Вы уже оствляли отзыв на данный товар.', 16, 1)
+		rollback tran
+	end
+end
+go
 ----------------------------------------------
 			--STORAGE PROCEDURES--
-----------------------------------------------
 ----------------------------------------------
 --PROCEDURES ON GOOD TABLE
 ----------------------------------------------
@@ -517,3 +537,153 @@ begin
 	end
 end
 go
+----------------------------------------------
+create procedure get_user_orders (
+	@id_user int
+)
+as
+begin
+	if ((select COUNT(up.id_user) from user_profile up where up.id_user = @id_user) = 0)
+	begin
+		raiserror('Пользователь не найден.', 16, 1)
+	end
+	else 
+	begin
+		declare @code_order int
+		declare @user_orders table (
+			code_order int,
+			date_order datetime,
+			id_status int,
+			id_user int,
+			sum_order money
+		)
+
+		declare @cursor_order cursor
+		set @cursor_order = cursor scroll
+		for select o.code_order from [order] o where o.id_user = @id_user
+		open @cursor_order
+		fetch next from @cursor_order into @code_order
+		while @@FETCH_STATUS = 0
+		begin
+			declare @article_number int
+			declare @count int
+			declare @sum money = 0
+			
+			declare @cursor_order_good cursor
+			set @cursor_order_good = cursor scroll
+			for select og.article_number, og.[count] from order_good og where og.id_order = @code_order
+			open @cursor_order_good
+			fetch next from @cursor_order_good into @article_number, @count
+			while @@FETCH_STATUS = 0
+			begin
+				declare @good_order_price money = (select top 1 gp.price from good_price gp where gp.article_number = @article_number and gp.change_date <= (select o.date_order from [order] o where o.code_order = @code_order) order by gp.change_date desc)
+				declare @good_order_tax decimal(5,2) = (select top 1 gt.tax from good_tax gt where gt.article_number = @article_number and gt.change_date <= (select o.date_order from [order] o where o.code_order = @code_order) order by gt.change_date desc)
+				declare @total money = (@good_order_price + ((@good_order_price * @good_order_tax)/100))
+				set @sum = @sum + (@total * @count)
+				fetch next from @cursor_order_good into @article_number, @count
+			end
+			close @cursor_order_good
+
+			insert into @user_orders (code_order, date_order, id_status, id_user, sum_order)
+			values (@code_order, (select o.date_order from [order] o where o.code_order = @code_order), (select o.id_status from [order] o where o.code_order = @code_order), (select o.id_user from [order] o where o.code_order = @code_order), @sum)
+			
+			fetch next from @cursor_order into @code_order
+		end
+		close @cursor_order
+
+		select * from @user_orders
+	end
+end
+go
+----------------------------------------------
+--PROCEDURES ON GOOD_PARAMETER TABLE
+----------------------------------------------
+create procedure add_good_parameter (
+	@article_number int,
+	@name nvarchar(50),
+	@value nvarchar(100)
+)
+as
+begin
+	insert into good_parameter
+	values (@article_number, @name, @value)
+end
+go
+----------------------------------------------
+create procedure delete_good_parameter  (
+	@article_number int
+)
+as
+begin
+	delete good_parameter
+	where article_number = @article_number
+end
+go
+----------------------------------------------
+--PROCEDURES ON GOOD_RATE TABLE
+----------------------------------------------
+create procedure get_good_rate (
+	@article_number int
+)
+as
+begin
+	
+	select gr.id, gr.rate, gr.feedback, (up.last_name + ' ' + up.first_name + ' ' + up.middle_name) as 'user'
+	from good_rate gr join user_profile up on gr.id_user = up.id_user
+	where gr.article_number = @article_number
+end
+go
+----------------------------------------------
+create procedure add_good_rate (
+	@article_number int,
+	@rate int,
+	@feedback nvarchar(300),
+	@id_user int
+)
+as
+begin
+	insert into good_rate
+	values (@article_number, @id_user, @rate, @feedback)
+end
+go
+----------------------------------------------
+create procedure update_good_rate (
+	@id int,
+	@rate int,
+	@feedback nvarchar(300),
+	@id_user int
+)
+as
+begin
+	if ((select gr.id_user from good_rate gr) = @id_user)
+	begin
+		update good_rate
+		set rate = @rate,
+			feedback = @feedback
+		where id = @id
+	end
+	else 
+	begin
+		raiserror('Вы не можете редактировать не свой отзыв.', 16, 1)
+	end
+end
+go
+----------------------------------------------
+create procedure delete_good_rate (
+	@id int,
+	@id_user int
+)
+as
+begin
+	if ((select gr.id_user from good_rate gr) = @id_user)
+	begin
+		delete good_rate
+		where id = @id
+	end
+	else
+	begin
+		raiserror('Вы не можете удалить не свой отзыв.', 16, 1)
+	end
+end
+go
+----------------------------------------------
